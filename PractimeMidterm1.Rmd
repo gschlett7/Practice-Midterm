@@ -1,0 +1,107 @@
+---
+title: "Practice Midterm 1"
+author: "Gregory Schlett"
+date: "03-04-2025"
+output: html_document
+---
+
+#Practice Midterm 1 - Naive or ETS?
+
+```{r}
+getwd()
+```
+
+
+```{r}
+library(fpp2)
+
+data("arrivals")
+
+#Here I pull US Arrivals
+us_arrivals <- arrivals[, "US"]
+
+#This plots the time series
+autoplot(us_arrivals) + ggtitle("US Arrivals to Australia") + ylab("Arrivals") + xlab("Year")
+```
+###### Arrivals is increasing over time 
+
+```{r}
+#Summary and Boxplot
+summary(us_arrivals)
+boxplot(us_arrivals, main="Boxplot of US Arrivals to Australia", ylab="Arrivals")
+```
+```{r}
+#Decomposition
+us_arrivals_decomp <- decompose(us_arrivals, type="multiplicative")
+autoplot(us_arrivals_decomp)
+```
+###### Strong Seasonality - repeating patterns
+###### Multiplicative - seasonal variations are proportional to the trend
+###### Summer months have around the peaks
+
+```{r}
+#Seasonal Adjustment
+us_arrivals_adj <- seasadj(us_arrivals_decomp)
+autoplot(us_arrivals_adj) +
+  autolayer(us_arrivals, series="Actual", alpha=0.5) +
+  ggtitle("Seasonally Adjusted US Arrivals")
+```
+
+```{r}
+#Naive
+fit_naive <- naive(us_arrivals, h=12)
+
+autoplot(residuals(fit_naive)) + ggtitle("Residuals of Naïve Forecast")
+
+hist(residuals(fit_naive), main="Histogram of Residuals", xlab="Residuals")
+
+# Fitted values vs. residuals
+plot(fitted(fit_naive), residuals(fit_naive), main="Fitted Values vs. Residuals")
+
+# Actual values vs. residuals
+plot(us_arrivals, residuals(fit_naive), main="Actual Values vs. Residuals")
+
+Acf(residuals(fit_naive))
+```
+###### Residuals are not perfectly normal
+##### Uncorrelated residuals - successful Naive
+
+```{r}
+#Accuracy Measure
+accuracy(fit_naive)
+```
+###### ME = close to 0 ... no strong bias
+###### High RMSE - predictions less accurate
+###### Low MAE
+###### MAPE around 10% - reasonable accuracy
+###### MASE > 1 - Model performs worse than Naive (in this case slight)
+###### ACF1 close to 0 - no strong autocorrelation
+
+```{r}
+#Forecast
+future_forecast <- forecast(fit_naive, h=12)
+autoplot(future_forecast) + ggtitle("Forecast for Next Year")
+```
+###### As time progresses uncertainty becomes exponentially greater
+###### Seasonality and trend are not fully captured
+###### Flat Projection - future values will remain around the most recent historical value
+###### Not the best model choice - Let's Try Exponential Smoothing!
+
+```{r}
+#Exponential Smoothing
+library(forecast)
+
+# Fit ETS model
+fit_ets <- ets(us_arrivals)
+
+summary(fit_ets)
+
+checkresiduals(fit_ets)
+
+# Forecast for next year
+forecast_ets <- forecast(fit_ets, h=12)
+
+autoplot(forecast_ets)
+```
+###### Shows stable trend with some seasonality 
+###### Exponential Smoothing appears to work much better
