@@ -1,0 +1,196 @@
+---
+title: "Practice Midterm 1 & 2"
+author: "Gregory Schlett"
+date: "03-04-2025"
+output: html_document
+---
+
+#Practice Midterm 1 & 2 
+
+```{r}
+getwd()
+```
+
+
+```{r}
+library(fpp2)
+
+data("arrivals")
+
+#Here I pull US Arrivals
+us_arrivals <- arrivals[, "US"]
+
+#This plots the time series
+autoplot(us_arrivals) + ggtitle("US Arrivals to Australia") + ylab("Arrivals") + xlab("Year")
+```
+###### Arrivals is increasing over time 
+
+```{r}
+#Summary and Boxplot
+summary(us_arrivals)
+boxplot(us_arrivals, main="Boxplot of US Arrivals to Australia", ylab="Arrivals")
+```
+```{r}
+#Decomposition
+us_arrivals_decomp <- decompose(us_arrivals, type="multiplicative")
+autoplot(us_arrivals_decomp)
+```
+###### Strong Seasonality - repeating patterns
+###### Multiplicative - seasonal variations are proportional to the trend
+###### Summer months have around the peaks
+
+```{r}
+#Seasonal Adjustment
+us_arrivals_adj <- seasadj(us_arrivals_decomp)
+autoplot(us_arrivals_adj) +
+  autolayer(us_arrivals, series="Actual", alpha=0.5) +
+  ggtitle("Seasonally Adjusted US Arrivals")
+```
+
+```{r}
+#Naive
+fit_naive <- naive(us_arrivals, h=12)
+
+autoplot(residuals(fit_naive)) + ggtitle("Residuals of Naïve Forecast")
+
+hist(residuals(fit_naive), main="Histogram of Residuals", xlab="Residuals")
+
+# Fitted values vs. residuals
+plot(fitted(fit_naive), residuals(fit_naive), main="Fitted Values vs. Residuals")
+
+# Actual values vs. residuals
+plot(us_arrivals, residuals(fit_naive), main="Actual Values vs. Residuals")
+
+Acf(residuals(fit_naive))
+```
+###### Residuals are not perfectly normal
+##### Uncorrelated residuals - successful Naive
+
+```{r}
+#Accuracy Measure
+accuracy(fit_naive)
+```
+###### ME = close to 0 ... no strong bias
+###### High RMSE - predictions less accurate
+###### Low MAE
+###### MAPE around 10% - reasonable accuracy
+###### MASE > 1 - Model performs worse than Naive (in this case slight)
+###### ACF1 close to 0 - no strong autocorrelation
+
+```{r}
+#Forecast
+future_forecast <- forecast(fit_naive, h=12)
+autoplot(future_forecast) + ggtitle("Forecast for Next Year")
+```
+###### As time progresses uncertainty becomes exponentially greater
+###### Seasonality and trend are not fully captured
+###### Flat Projection - future values will remain around the most recent historical value
+###### Not the best model choice - Let's Try Exponential Smoothing!
+
+```{r}
+#Exponential Smoothing
+library(forecast)
+
+# Fit ETS model
+fit_ets <- ets(us_arrivals)
+
+summary(fit_ets)
+
+checkresiduals(fit_ets)
+
+# Forecast for next year
+forecast_ets <- forecast(fit_ets, h=12)
+
+autoplot(forecast_ets)
+```
+###### Shows stable trend with some seasonality 
+###### Exponential Smoothing appears to work much better
+
+```{r}
+library(fpp2)
+library(TTR)         
+library(ggplot2)     
+library(forecast)    
+
+data("arrivals")
+
+us_arrivals <- arrivals[, "US"]
+
+autoplot(us_arrivals) +
+  labs(title = "US Arrivals to Australia",
+       x = "Year", Y = "Arrivals") + 
+  theme_minimal()
+
+sma_3 <- SMA(us_arrivals, n = 3)
+sma_6 <- SMA(us_arrivals, n = 6)
+sma_9 <- SMA(us_arrivals, n = 9)
+
+sma_df <- data.frame(
+  Time = as.numeric(time(us_arrivals)), 
+  Value = as.numeric(us_arrivals), 
+  sma_3 = as.numeric(sma_3),
+  sma_6 = as.numeric(sma_6),
+  sma_9 = as.numeric(sma_9)
+)
+
+ggplot(sma_df, aes(x = Time)) +
+  geom_line(aes(y = Value), color = "black", linewidth = 1) + 
+  geom_line(aes(y = sma_3), color = "red", linewidth = 1) +   
+  geom_line(aes(y = sma_6), color = "blue", linewidth = 1) +  
+  geom_line(aes(y = sma_9), color = "green", linewidth = 1) + 
+  labs(title = "US Arrivals to Australia with Moving Averages",
+       x = "Year", y = "Arrivals") +
+  theme_minimal()
+
+best_sma <- sma_6
+best_sma_ts <- ts(best_sma, start = start(us_arrivals), frequency = 12)
+
+#Naive based on SMA
+forecast_sma <- forecast(best_sma_ts, h = 12)
+
+autoplot(forecast_sma) +
+  labs(title = "12-Month Forecast of US Arrivals using SMA(6)",
+       x = "Year", y = "Forecasted Arrivals") +
+  theme_minimal()
+```
+
+```{r}
+# Fit the Holt-Winters model
+hw_model <- hw(us_arrivals, seasonal = "multiplicative", h = 12)
+
+summary(hw_model)
+```
+
+```{r}
+alpha_value <- hw_model$model$par["alpha"]
+beta_value <- hw_model$model$par["beta"]
+gamma_value <- hw_model$model$par["gamma"]
+sigma_value <- sqrt(hw_model$model$sigma2)
+
+initial_values <- hw_model$model$initstate
+
+cat("Alpha:", alpha_value, "\n")
+cat("Beta:", beta_value, "\n")
+cat("Gamma:", gamma_value, "\n")
+cat("Sigma:", sigma_value, "\n")
+cat("Initial Level:", initial_values[1], "\n")
+cat("Initial Trend:", initial_values[2], "\n")
+cat("Initial Seasonality:", initial_values[-(1:2)], "\n")
+
+residuals_hw <- residuals(hw_model)
+
+autoplot(residuals_hw) +
+  ggtitle("Residuals of Holt-Winters Model") +
+  theme_minimal()
+
+hist(residuals_hw, breaks = 20, main = "Histogram of Residuals", col = "blue")
+
+autoplot(fitted(hw_model), residuals_hw) +
+  ggtitle("Fitted Values vs. Residuals")
+
+autoplot(us_arrivals, residuals_hw) +
+  ggtitle("Actual Values vs. Residuals")
+
+Acf(residuals_hw, main = "ACF of Residuals")
+```
+
